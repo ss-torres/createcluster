@@ -203,39 +203,68 @@ func isRedisConf(fileName string) bool {
 		strings.HasSuffix(fileName, ".conf")
 }
 
-func isRedisRelated(file os.FileInfo) bool {
-	fileName := file.Name()
+func isRedisRelated(fileName string) bool {
 	return isRedisLog(fileName) || isRedisAppendOnly(fileName) ||
 		isRedisDump(fileName) || isRedisConf(fileName)
 }
 
-func (c *Commands) Clean() error {
-	dir, err := os.Open(kDefaultPath)
+func GetAllRegularFileNames(path string) ([]string, error) {
+	dir, err := os.Open(path)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	fileInfo, err := dir.Stat()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if !fileInfo.IsDir() {
-		return fmt.Errorf("%s not dir, this shouldn't happen", kDefaultPath)
+		return nil,
+			fmt.Errorf("%s not dir, this shouldn't happen", kDefaultPath)
 	}
 	files, err := dir.Readdir(0)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
+	fileNames := make([]string, 10, 10)
 	for _, file := range files {
 		if !file.Mode().IsRegular() {
 			continue
 		}
 
-		if !isRedisRelated(file) {
+		fileNames = append(fileNames, file.Name())
+	}
+
+	return fileNames, nil
+}
+
+func (c *Commands) Clean() error {
+	fileNames, err := GetAllRegularFileNames(kDefaultPath)
+	if err != nil {
+		return err
+	}
+	for _, fileName := range fileNames {
+		if !isRedisRelated(fileName) {
 			continue
 		}
 
-		fileName := file.Name()
+		fmt.Printf("remove file %s\n", fileName)
+		os.Remove(filepath.Join(fileName))
+	}
+
+	return nil
+}
+
+func (c *Commands) CleanLogs() error {
+	fileNames, err := GetAllRegularFileNames(kDefaultPath)
+	if err != nil {
+		return err
+	}
+	for _, fileName := range fileNames {
+		if !isRedisLog(fileName) {
+			continue
+		}
+
 		fmt.Printf("remove file %s\n", fileName)
 		os.Remove(filepath.Join(fileName))
 	}
