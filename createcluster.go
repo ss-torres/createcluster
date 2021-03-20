@@ -74,4 +74,16 @@ func main() {
 		fmt.Printf("cluster replicate failed, error: %v\n", err)
 		os.Exit(-1)
 	}
+
+	err = c.Stop()
+	if err != nil {
+		fmt.Printf("close all nodes failed, error: %v\n", err)
+		os.Exit(-1)
+	}
+
+	err = c.Clean()
+	if err != nil {
+		fmt.Printf("remove all node files failed, error: %v\n", err)
+		os.Exit(-1)
+	}
 }

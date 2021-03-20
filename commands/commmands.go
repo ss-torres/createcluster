@@ -5,7 +5,9 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -14,7 +16,8 @@ import (
 )
 
 const (
-	kHost = "127.0.0.1"
+	kHost        = "127.0.0.1"
+	kDefaultPath = "."
 )
 
 type Commands struct {
@@ -155,6 +158,86 @@ func (c *Commands) Replicate() error {
 			}
 			fmt.Printf("result: %s\n", res)
 		}
+	}
+
+	return nil
+}
+
+func (c *Commands) Stop() error {
+	nodes_count := c.nodes
+	for idx := 0; idx < nodes_count; idx++ {
+		portStr := strconv.Itoa(c.port + idx)
+		rdb := redis.NewClusterClient(&redis.ClusterOptions{
+			Addrs: []string{net.JoinHostPort(kHost, portStr)},
+		})
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		status := rdb.Shutdown(ctx)
+		fmt.Printf("source: %s:%s, cmd:%v\n", kHost, portStr, status)
+		res, err := status.Result()
+		if err == nil {
+			fmt.Printf("result: %s\n", res)
+		}
+	}
+	return nil
+}
+
+func isRedisLog(fileName string) bool {
+	return strings.HasPrefix(fileName, "nodes-") &&
+		strings.HasSuffix(fileName, ".log")
+}
+
+func isRedisAppendOnly(fileName string) bool {
+	return strings.HasPrefix(fileName, "appendonly") &&
+		strings.HasSuffix(fileName, ".aof")
+}
+
+func isRedisDump(fileName string) bool {
+	return strings.HasPrefix(fileName, "dump") &&
+		strings.HasSuffix(fileName, ".rdb")
+}
+
+func isRedisConf(fileName string) bool {
+	return strings.HasPrefix(fileName, "nodes-") &&
+		strings.HasSuffix(fileName, ".conf")
+}
+
+func isRedisRelated(file os.FileInfo) bool {
+	fileName := file.Name()
+	return isRedisLog(fileName) || isRedisAppendOnly(fileName) ||
+		isRedisDump(fileName) || isRedisConf(fileName)
+}
+
+func (c *Commands) Clean() error {
+	dir, err := os.Open(kDefaultPath)
+	if err != nil {
+		return err
+	}
+	fileInfo, err := dir.Stat()
+	if err != nil {
+		return err
+	}
+	if !fileInfo.IsDir() {
+		return fmt.Errorf("%s not dir, this shouldn't happen", kDefaultPath)
+	}
+	files, err := dir.Readdir(0)
+	if err != nil {
+		return err
+	}
+
+	for _, file := range files {
+		if !file.Mode().IsRegular() {
+			continue
+		}
+
+		if !isRedisRelated(file) {
+			continue
+		}
+
+		fileName := file.Name()
+		fmt.Printf("remove file %s\n", fileName)
+		os.Remove(filepath.Join(fileName))
 	}
 
 	return nil
