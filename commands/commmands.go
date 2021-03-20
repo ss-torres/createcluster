@@ -13,6 +13,10 @@ import (
 	"github.com/go-redis/redis/v8"
 )
 
+const (
+	kHost = "127.0.0.1"
+)
+
 type Commands struct {
 	redisServer string
 	port        int
@@ -56,7 +60,7 @@ func (c *Commands) Start() error {
 			"--appendonly", "yes", "--appendfilename", "appendonly-"+portStr+".aof",
 			"--dbfilename", "dump-"+portStr+".rdb",
 			"--logfile", "nodes-"+portStr+".log", "--daemonize", "yes")
-		fmt.Printf("cmd: %s\n", cmd.String())
+		fmt.Printf("source: %s:%s, cmd: %s\n", kHost, portStr, cmd.String())
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("%v, output: %s", err, out)
@@ -66,15 +70,16 @@ func (c *Commands) Start() error {
 }
 
 func (c *Commands) Meeting() error {
+	portStr := strconv.Itoa(c.port)
 	rdb := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{net.JoinHostPort("127.0.0.1", strconv.Itoa(c.port))},
+		Addrs: []string{net.JoinHostPort(kHost, portStr)},
 	})
 	defer rdb.Close()
 	for idx := 1; idx < c.nodes; idx++ {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		status := rdb.ClusterMeet(ctx, "127.0.0.1", strconv.Itoa(c.port+idx))
-		fmt.Printf("cmd: %s\n", status.FullName())
+		status := rdb.ClusterMeet(ctx, kHost, strconv.Itoa(c.port+idx))
+		fmt.Printf("source: %s:%s, cmd: %s\n", kHost, portStr, status.String())
 		res, err := status.Result()
 		if err != nil {
 			return err
@@ -89,13 +94,14 @@ func (c *Commands) Replicate() error {
 		return nil
 	}
 
+	portStr := strconv.Itoa(c.port)
 	rdb := redis.NewClusterClient(&redis.ClusterOptions{
-		Addrs: []string{net.JoinHostPort("127.0.0.1", strconv.Itoa(c.port))},
+		Addrs: []string{net.JoinHostPort(kHost, portStr)},
 	})
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	str_cmd := rdb.ClusterNodes(ctx)
-	fmt.Printf("cmd: %s\n", str_cmd.FullName())
+	fmt.Printf("source: %s:%s, cmd: %s\n", kHost, portStr, str_cmd.String())
 	res, err := str_cmd.Result()
 	if err != nil {
 		return err
@@ -134,14 +140,15 @@ func (c *Commands) Replicate() error {
 	for master_idx := 0; master_idx < master_count; master_idx++ {
 		for replica_idx := 0; replica_idx < c.replicas; replica_idx++ {
 			node_idx := master_idx + (replica_idx+1)*master_count
+			portStr := strconv.Itoa(c.port + node_idx)
 			slave_rdb := redis.NewClusterClient(&redis.ClusterOptions{
-				Addrs: []string{net.JoinHostPort("127.0.0.1", strconv.Itoa(c.port+node_idx))},
+				Addrs: []string{net.JoinHostPort(kHost, portStr)},
 			})
 
 			ctx, cancel = context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()
 			status := slave_rdb.ClusterReplicate(ctx, nodeIds[c.port+master_idx])
-			fmt.Printf("cmd: %s\n", status.FullName())
+			fmt.Printf("source: %s:%s, cmd: %s\n", kHost, portStr, status.String())
 			res, err := status.Result()
 			if err != nil {
 				return err

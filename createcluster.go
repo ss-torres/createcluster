@@ -7,6 +7,7 @@ import (
 	"math"
 	"os"
 	"sort"
+	"time"
 )
 
 var redisServer = flag.String("redis-server", "/home/u/snap/redis-5.0.8/src/redis-server", "redis server path")
@@ -52,17 +53,21 @@ func main() {
 		os.Exit(-1)
 	}
 
-	// err = c.Start()
-	// if err != nil {
-	// 	fmt.Printf("cluster start failed, error: %v\n", err)
-	// 	os.Exit(-1)
-	// }
+	err = c.Start()
+	if err != nil {
+		fmt.Printf("cluster start failed, error: %v\n", err)
+		os.Exit(-1)
+	}
 
-	// err = c.Meeting()
-	// if err != nil {
-	// 	fmt.Printf("cluster meeting failed, error: %v\n", err)
-	// 	os.Exit(-1)
-	// }
+	time.Sleep(1 * time.Second)
+
+	err = c.Meeting()
+	if err != nil {
+		fmt.Printf("cluster meeting failed, error: %v\n", err)
+		os.Exit(-1)
+	}
+
+	time.Sleep(3 * time.Second)
 
 	err = c.Replicate()
 	if err != nil {
